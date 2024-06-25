@@ -82,7 +82,7 @@ export default {
       <template #content>
         <pv-table :value="reports">
           <pv-column field="name" header="Driver’s Name"></pv-column>
-          <pv-column field="description" header="Description"></pv-column>
+          <pv-column field="type" header="Description"></pv-column>
           <pv-column field="createdAt" header="Date"></pv-column>
         </pv-table>
       </template>
