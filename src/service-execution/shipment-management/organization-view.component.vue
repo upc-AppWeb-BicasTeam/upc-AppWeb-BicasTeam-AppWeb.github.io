@@ -8,7 +8,6 @@ export default {
     return {
       shipmentsApi: new ShipmentApiService(),
       shipments: [],
-      shipment: [],
       selectedShipment: null,
       shipmentDetailsDialog: false,
     };
@@ -17,18 +16,35 @@ export default {
     this.getDataShipment();
   },
   methods: {
-    async getDataShipment(){
-      const response = await this.shipmentsApi.getAllShipments();
-      const shipments = response.data;
-      for (let shipment of shipments) {
-        const userResponse = await this.shipmentsApi.findUserByID(shipment['id-user']);
-        console.log(userResponse);
-        const user = userResponse.data[0];
-        shipment.driverName = `${user.name} ${user.lastName}`;
-      }
-      this.shipments = shipments;
-      console.log(this.shipments);
+    async getDataShipment() {
+      try {
+        const response = await this.shipmentsApi.getAllShipments();
+        const shipments = response.data;
 
+        for (let shipment of shipments) {
+          if (shipment.userId && shipment.userId > 0) {
+            try {
+              const userResponse = await this.shipmentsApi.findUserByID(shipment.userId);
+              const user = userResponse.data;
+
+              if (user) {
+                shipment.driverName = `${user.name} ${user.lastName}`;
+              } else {
+                shipment.driverName = 'Unknown';
+              }
+            } catch (error) {
+              console.error(`Error fetching user with ID ${shipment.userId}:`, error);
+              shipment.driverName = 'Unknown';
+            }
+          } else {
+            shipment.driverName = 'Unknown';
+          }
+        }
+
+        this.shipments = shipments;
+      } catch (error) {
+        console.error("Error fetching shipments or user data:", error);
+      }
     },
     showShipmentDetails(shipment) {
       this.selectedShipment = shipment;
@@ -55,8 +71,7 @@ export default {
           <pv-column field="driverName" header="Driver's Name"></pv-column>
           <pv-column field="destiny" header="Destiny"></pv-column>
           <pv-column field="description" header="Description"></pv-column>
-          <pv-column field="dateTime.date" header="Delivery date"></pv-column>
-          <pv-column field="dateTime.time" header="Delivery time"></pv-column>
+          <pv-column field="createdAt" header="Delivery date"></pv-column>
           <pv-column field="status" header="Status"></pv-column>
         </pv-table>
       </template>
@@ -67,8 +82,7 @@ export default {
       <p>Driver's Name: {{ selectedShipment.driverName }}</p>
       <p>Destiny: {{ selectedShipment.destiny }}</p>
       <p>Description: {{ selectedShipment.description }}</p>
-      <p>Delivery date: {{ selectedShipment.dateTime.date }}</p>
-      <p>Delivery time: {{ selectedShipment.dateTime.time }}</p>
+      <p>Delivery date: {{ selectedShipment.createdAt }}</p>
       <p>Status: {{ selectedShipment.status }}</p>
     </div>
     <template #footer>

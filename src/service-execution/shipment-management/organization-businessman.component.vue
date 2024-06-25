@@ -3,33 +3,52 @@ import {ShipmentApiService} from "./services/shipment-api.service.js";
 export default {
   name: "organization-businessman",
   title: "Organization Businessman",
-  data(){
+  data() {
     return {
       shipmentsApi: new ShipmentApiService(),
       shipments: [],
-      shipment: [],
-      submitted: false,
-      shipmentDialog: false,
       selectedShipment: null,
       shipmentDetailsDialog: false,
+      addingShipmentDialogVisible: false,
+      newShipment: {
+        userId: "",
+        destiny: "",
+        description: "",
+        createdAt: "",
+        status: "Programmed"
+      }
     };
   },
-  created(){
-    this.getDataShipment();
-  },
   methods: {
-    async getDataShipment(){
-      const response = await this.shipmentsApi.getAllShipments();
-      const shipments = response.data;
-      for (let shipment of shipments) {
-        const userResponse = await this.shipmentsApi.findUserByID(shipment['id-user']);
-        console.log(userResponse);
-        const user = userResponse.data[0];
-        shipment.driverName = `${user.name} ${user.lastName}`;
-      }
-      this.shipments = shipments;
-      console.log(this.shipments);
+    async getDataShipment() {
+      try {
+        const response = await this.shipmentsApi.getAllShipments();
+        const shipments = response.data;
 
+        for (let shipment of shipments) {
+          if (shipment.userId && shipment.userId > 0) {
+            try {
+              const userResponse = await this.shipmentsApi.findUserByID(shipment.userId);
+              const user = userResponse.data;
+
+              if (user) {
+                shipment.driverName = `${user.name} ${user.lastName}`;
+              } else {
+                shipment.driverName = 'Unknown';
+              }
+            } catch (error) {
+              console.error(`Error fetching user with ID ${shipment.userId}:`, error);
+              shipment.driverName = 'Unknown';
+            }
+          } else {
+            shipment.driverName = 'Unknown';
+          }
+        }
+
+        this.shipments = shipments;
+      } catch (error) {
+        console.error("Error fetching shipments or user data:", error);
+      }
     },
     showShipmentDetails(shipment) {
       this.selectedShipment = shipment;
@@ -38,39 +57,47 @@ export default {
     hideShipmentDetailsDialog() {
       this.shipmentDetailsDialog = false;
     },
-    newItem() {
-      this.shipment = {
-        driverName: '',
-        destiny: '',
-        description: '',
-        dateTime: {
-          date: '',
-          time: '',
-        },
-        status:'Programmed',
+    openAddShipmentDialog() {
+      this.addingShipmentDialogVisible = true;
+    },
+    closeAddShipmentDialog() {
+      this.addingShipmentDialogVisible = false;
+      // Limpiar los datos del nuevo shipment al cerrar el diálogo
+      this.newShipment = {
+        userId: "",
+        destiny: "",
+        description: "",
+        createdAt: "",
+        status: "Programmed"
       };
-      this.submitted = false;
-      this.shipmentDialog = true;
     },
-    hideDialog(){
-      this.shipmentDialog = false;
-      this.submitted = false;
-    },
-    saveShipment(){
-      if (!this.shipment.driverName || !this.shipment.destiny || !this.shipment.description || !this.shipment.dateTime.date || !this.shipment.dateTime.time) {
-        this.submitted = true;
-        return;
-      }
-      // Muestra datos en la tabla sin afectar el json
-      //let shipmentCopy = {...this.shipment};
-      //this.shipments.push(shipmentCopy);
+    async addNewShipment() {
+      try {
+        const response = await this.shipmentsApi.createShipment(this.newShipment);
+        console.log("New shipment added:", response.data);
 
-      this.shipmentDialog = false;
-      this.submitted = false;
-      alert("Se añadió exitosamente");
+        // Actualizar la lista de shipments después de agregar uno nuevo
+        this.getDataShipment();
+
+        // Cerrar el diálogo de agregar shipment
+        this.closeAddShipmentDialog();
+      } catch (error) {
+        if (error.response) {
+          console.error("Error response data:", error.response.data);
+          console.error("Error response status:", error.response.status);
+        } else if (error.request) {
+          console.error("Error request:", error.request);
+        } else {
+          console.error("Error message:", error.message);
+        }
+        console.error("Error adding new shipment:", error);
+      }
     }
+  },
+  created() {
+    this.getDataShipment();
   }
-}
+};
 </script>
 
 <template>
@@ -79,8 +106,8 @@ export default {
       <h1 class="text-100">Organization</h1>
       <h3>Click in the list to see details</h3>
     </div>
-    <div class="flex justify-content-end">
-      <pv-button label="Add" icon="pi pi-plus" severity="success" class="mr-5" @click="newItem"/>
+    <div class="add-shipment-button">
+      <pv-button label="Add Shipment" @click="openAddShipmentDialog" icon="pi pi-plus" />
     </div>
   </div>
   <div class="card-container-1">
@@ -90,8 +117,7 @@ export default {
           <pv-column field="driverName" header="Driver's Name"></pv-column>
           <pv-column field="destiny" header="Destiny"></pv-column>
           <pv-column field="description" header="Description"></pv-column>
-          <pv-column field="dateTime.date" header="Delivery date"></pv-column>
-          <pv-column field="dateTime.time" header="Delivery time"></pv-column>
+          <pv-column field="createdAt" header="Delivery date"></pv-column>
           <pv-column field="status" header="Status"></pv-column>
         </pv-table>
       </template>
@@ -102,59 +128,45 @@ export default {
       <p>Driver's Name: {{ selectedShipment.driverName }}</p>
       <p>Destiny: {{ selectedShipment.destiny }}</p>
       <p>Description: {{ selectedShipment.description }}</p>
-      <p>Delivery date: {{ selectedShipment.dateTime.date }}</p>
-      <p>Delivery time: {{ selectedShipment.dateTime.time }}</p>
+      <p>Delivery date: {{ selectedShipment.createdAt }}</p>
       <p>Status: {{ selectedShipment.status }}</p>
     </div>
-
     <template #footer>
-
       <pv-button label="Close" icon="pi pi-times" text @click="hideShipmentDetailsDialog" class="cancel-button"/>
-
     </template>
   </pv-dialog>
 
-  <pv-dialog v-model:visible="shipmentDialog" :style="{width: '450px'}" header="Add shipping" :modal="true" class="p-fluid dialog-style">
+  <pv-dialog v-model:visible="addingShipmentDialogVisible" :style="{width: '450px'}" header="Add Shipment" :modal="true" class="p-fluid dialog-style">
     <div class="field">
-      <p>Driver's Name</p>
-      <input id="name" v-model.trim="shipment.driverName" required="true" autofocus :invalid="submitted && !shipment.driverName" class="p-inputtext"/>
-      <small class="p-error" v-if="submitted && !shipment.driverName">Name is required.</small>
+      <p>User ID:</p>
+      <input id="userId" v-model="newShipment.userId" class="p-inputtext"/>
     </div>
     <div class="field">
       <p>Destiny</p>
-      <input id="destiny" v-model.trim="shipment.destiny" required="true" autofocus :invalid="submitted && !shipment.destiny" class="p-inputtext"/>
-      <small class="p-error" v-if="submitted && !shipment.destiny">Destiny is required.</small>
+      <input id="destiny" v-model="newShipment.destiny" class="p-inputtext"/>
     </div>
     <div class="field">
       <p>Description</p>
-      <input id="description" v-model.trim="shipment.description" required="true" class="p-inputtext"/>
-      <small class="p-error" v-if="submitted && !shipment.description">Description is required.</small>
+      <input id="description" type="text" v-model="newShipment.description" class="p-inputtext"/>
     </div>
     <div class="field">
       <p>Delivery date</p>
-      <pv-calendar v-model.trim="shipment.dateTime.date" dateFormat="yy/mm/dd" class="calendar"/>
-      <small class="p-error" v-if="submitted && !shipment.dateTime.date">Date is required.</small>
-    </div>
-    <div class="field">
-      <p>Delivery time</p>
-      <pv-calendar id="calendar-timeonly" v-model.trim="shipment.dateTime.time" timeOnly hour-format="hh:mm" class="calendar"/>
-      <small class="p-error" v-if="submitted && !shipment.dateTime.time">Time is required.</small>
+      <pv-calendar v-model="newShipment.createdAt" dateFormat="yy/mm/dd" class="calendar"/>
     </div>
     <div class="field">
       <p>Status</p>
-      <input id="status" v-model.trim="shipment.status" disabled placeholder="Programmed" value="Programmed" class="p-inputtext"/>
+      <input id="status" v-model="newShipment.status" disabled placeholder="Programmed" value="Programmed" class="p-inputtext"/>
     </div>
 
     <template #footer>
-      <pv-button label="Cancel" icon="pi pi-times" text @click="hideDialog" class="cancel-button"/>
-      <pv-button label="Save" icon="pi pi-check" text @click="saveShipment" class="save-button"/>
+      <pv-button label="Cancel" icon="pi pi-times" @click="closeAddShipmentDialog" class="cancel-button"/>
+      <pv-button label="Add" icon="pi pi-check" @click="addNewShipment" class="add-button"/>
     </template>
   </pv-dialog>
-
 </template>
 
-<style>
-.container-shipment{
+<style scoped>
+.container-shipment {
   display: flex !important;
   align-content: flex-start !important;
   align-items: flex-start !important;
@@ -168,38 +180,28 @@ export default {
   margin-left: 11rem;
 }
 
-.card-container-1{
+.card-container-1 {
   margin-right: 1rem;
 }
 
-@media (max-width: 860px){
-  .container{
+@media (max-width: 860px) {
+  .container {
     margin-left: 0;
   }
 
-  .container-info{
+  .container-info {
     margin-top: 4rem;
     margin-left: 1rem;
   }
 
-  .card-container-1{
+  .card-container-1 {
     margin-left: 1rem;
   }
 }
-.field label {
-  font-weight: bold;
-  color: #333;
-}
-.field input{
-  flex-grow: 1;
-}
-.calendar{
-  width: 100%;
-}
+
 .dialog-style .p-dialog-content {
   background-color: #f5f5f5;
   color: #333;
-
 }
 .dialog-style .p-dialog-header {
   background-color: #007bff;
@@ -209,8 +211,17 @@ export default {
   background-color: #dc3545;
   color: #fff;
 }
-.dialog-style .save-button {
-  background-color: #28a745;
-  color: #fff;
+.add-shipment-button {
+  margin-top: 1rem;
+}
+
+.field{
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+.field input{
+  flex-grow: 1;
 }
 </style>
